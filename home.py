@@ -1,6 +1,6 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, render_template
 from DB import db_cursor, db_connection
-from utils import prediction
+from utils import prediction, BallPredictor as predictor
 from pandas import DataFrame
 from json import dumps
 
@@ -55,12 +55,27 @@ def predict():
         'prevbatsmanstrikerate': totalDf['prevbatsmanstrikerate'].iloc[-1],
         'prevbowlerstrikerate': totalDf['prevbowlerstrikerate'].iloc[-1]
     },]
+    var_mod = ['wide','bye','legbye','noball','penalty','batsmanruns','dismissal',]
+    var_preds = ['batsmanid','bowlerid', 'prevbatsmanstrikerate', 'prevbowlerstrikerate']
     predDf = DataFrame(inp_list)
-    pred_data = prediction.prepare_data(totalDf, predDf)
+    pred_data = prediction.prepare_data(totalDf, predDf, var_preds, var_mod)
     # jsonable_preds = prediction.np_to_py_native_convert(pred_data)
     # print(jsonable_preds)
+    db_cursor.execute(f'SELECT dismissal FROM league.dismissals WHERE dismissal_id={pred_data[-1]}')
+    pred_data[-1] = db_cursor.fetchall()[0]['dismissal']
     return jsonify({
         'status': 200,
-        'prediction': dumps(pred_data, default=prediction.np_to_py_native_convert),
+        'prediction': pred_data,
         'data': 'success'
     })
+    
+@home_bp.route('/ballpredictor')
+def ballpredictor():
+    var_mod = ['wide','bye','legbye','noball','penalty','batsmanruns','dismissal',]
+    var_preds = ['batsmanid','bowlerid', 'prevbatsmanstrikerate', 'prevbowlerstrikerate']
+    pred = predictor.BallPredictor('SK Raina', 'Harbhajan Singh', var_mod, var_preds)
+    df = pred.predict(6)
+    return render_template('table.html', 
+                column_names=df.columns.values, 
+                row_data=list(df.values.tolist()), 
+                zip=zip)

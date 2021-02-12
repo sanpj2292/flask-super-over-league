@@ -5,7 +5,7 @@ from pandas.core.frame import DataFrame # data processing, CSV file I/O (e.g. pd
 #Import models from scikit learn module:
 # from sklearn.linear_model import LogisticRegression
 # from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn import metrics
 from typing import Dict, List
 #building predictive model , convert categorical to numerical data
@@ -32,7 +32,7 @@ def tranformToNumeric(dataframe: DataFrame, var_mod: List[str]) -> Dict:
         'labelEnc': label_enc
     }
 
-def prepare_data(dataframe, df):
+def prepare_data(dataframe, df, var_preds, var_mod):
     # dataframe = pd.read_sql_query('''
     #     SELECT 
     #         batsman_id,
@@ -56,21 +56,21 @@ def prepare_data(dataframe, df):
     #         END decision
     #     FROM league."Deliveries";''', dbconn)
     # convert categorical data to a numerical one
-    var_mod = ['wide','bye','legbye','noball','penalty','batsmanruns','dismissal',]
-    var_preds = ['batsmanid','bowlerid', 'prevbatsmanstrikerate', 'prevbowlerstrikerate']
-    transformDict = tranformToNumeric(dataframe, var_mod)
-    dataframe = transformDict['dataframe']
+    
+    # transformDict = tranformToNumeric(dataframe, var_mod)
+    # dataframe = transformDict['dataframe']
     if (df is not None):
         model = trainData(dataframe, var_preds, var_mod)
         preds = model.predict(df[var_preds])
     else:
         preds = predict_based_on_model(dataframe, var_preds, var_mod)
-    return getPredictions(preds, transformDict)
+    return getPredictions(preds)
 
-def getPredictions(preds, transformDict):
-    predictions = preds.flatten()
-    dismissal = transformDict['labelEnc'].inverse_transform([ predictions[-1] ])[0]
-    return [ *predictions[0:-1],  dismissal]
+def getPredictions(preds, transformDict=None):
+    predictions = [int(pred) for pred in preds.flatten()]
+    # dismissal_ind = int(predictions[-1])
+    # dismissal = transformDict['labelEnc'].inverse_transform([ dismissal_ind ])[0]
+    return predictions
 
 def np_to_py_native_convert(o):
     if isinstance(o, np.int64):
@@ -84,14 +84,14 @@ def np_to_py_native_convert(o):
 
 def trainData(dataframe, xvars, yvars):
     # model = DecisionTreeClassifier(criterion='gini', random_state=0)
-    np.random.RandomState(15)
+    # np.random.RandomState(15)
     # model = DecisionTreeClassifier(criterion='gini')
-    model = DecisionTreeClassifier(criterion='gini', random_state=15)
+    model = DecisionTreeRegressor()
     X, Y = dataframe[xvars], dataframe[yvars]
     model.fit(X, Y)
     return model
 
 def predict_based_on_model(dataframe, prediction_var, outcome_var, modeltype='decisiontree'):
     # if(modeltype == 'decisiontree'):
-    model = DecisionTreeClassifier(criterion='gini')
+    model = DecisionTreeRegressor()
     return classification_model(model, dataframe, prediction_var, outcome_var)

@@ -1,38 +1,26 @@
-DROP FUNCTION league.getbatvsbowlstats;
+-- FUNCTION: league.getbatvsbowlstats(text, text)
 
-CREATE OR REPLACE FUNCTION league.GetBatVsBowlStats (BATSMAN text, BOWLER text) 
-	returns table (
-		batsmanId bigint,
-		bowlerId bigint,
-		matchId int,
-        over int,
-		ball int,
-		wide int,
-		bye int,
-		legbye int,
-		noball int,
-		penalty int,
-        batsmanRuns int,
-		dismissal text,
-		sumRuns bigint,
-        BallCount bigint,
-        batsmanStrikeRate NUMERIC,
-        bowlerStrikeRate NUMERIC,
-        prevBatsmanStrikeRate NUMERIC,
-        prevBowlerStrikeRate NUMERIC,
-        decision TEXT
-	) LANGUAGE PLPGSQL AS $$
-	DECLARE
-		bowl_id bigint;
-		bats_id bigint;
+-- DROP FUNCTION league.getbatvsbowlstats(text, text);
+
+CREATE OR REPLACE FUNCTION league.getbatvsbowlstats(
+	batsman text DEFAULT NULL, bowler text DEFAULT NULL)
+    RETURNS TABLE(batsmanid bigint, bowlerid bigint, matchid integer, over integer, ball integer, wide integer, bye integer, legbye integer, noball integer, penalty integer, batsmanruns integer, dismissal bigint, sumruns bigint, wicket bigint, ballcount bigint, batsmanstrikerate numeric, bowlerstrikerate numeric, prevbatsmanstrikerate numeric, prevbowlerstrikerate numeric, decision text) 
+    LANGUAGE 'plpgsql'
+
+    COST 100
+    VOLATILE 
+    ROWS 1000
+    
+AS $BODY$
+DECLARE
+		bowl_id bigint DEFAULT 0;
+		bats_id bigint DEFAULT 0;
 	BEGIN
-		SELECT player_id FROM league."Players" WHERE player_name = batsman into bats_id;
-		SELECT player_id FROM league."Players" WHERE player_name = bowler into bowl_id;
-
-		
-
-
-		return query 
+		IF (batsman IS NOT NULL AND bowler IS NOT NULL) THEN
+			SELECT player_id FROM league."Players" WHERE player_name = batsman into bats_id;
+			SELECT player_id FROM league."Players" WHERE player_name = bowler into bowl_id;
+		END IF;
+		return query
 			WITH strike_rate_out as (
 				SELECT 
 					*,
@@ -50,7 +38,8 @@ CREATE OR REPLACE FUNCTION league.GetBatVsBowlStats (BATSMAN text, BOWLER text)
 								ORDER BY d.match_id, d.over, d.ball)) AS wicket,
 						RANK() OVER (PARTITION BY d.batsman_id, d.bowler_id ORDER BY d.match_id, d.over, d.ball) AS BallCount
 					FROM league."Deliveries" d
-					WHERE d.bowler_id = bowl_id AND d.batsman_id=bats_id
+					WHERE (bowl_id = 0 OR d.bowler_id = bowl_id) AND 
+						(bats_id = 0 OR d.batsman_id=bats_id)
 					ORDER BY d.match_id, d.over, d.ball
 				) del
 				ORDER BY del.match_id, del.over, del.ball
@@ -63,8 +52,9 @@ CREATE OR REPLACE FUNCTION league.GetBatVsBowlStats (BATSMAN text, BOWLER text)
 				sro.noball_runs,
 				sro.penalty_runs,
 				sro.batsman_runs,
-				sro.dismissal_kind,
+				dis.dismissal_id,
 				sro.runs_sum,
+				sro.wicket,
 				sro.BallCount,
 				sro.batsman_strike_rate,
 				sro.bowler_strike_rate,
@@ -86,6 +76,10 @@ CREATE OR REPLACE FUNCTION league.GetBatVsBowlStats (BATSMAN text, BOWLER text)
 					sro.dismissal_kind
 				END decision
 			FROM strike_rate_out sro
+			LEFT JOIN league.dismissals dis ON dis.dismissal = sro.dismissal_kind
 			ORDER BY sro.match_id, sro.over, sro.ball;
 	END;
-$$
+$BODY$;
+
+ALTER FUNCTION league.getbatvsbowlstats(text, text)
+    OWNER TO postgres;
