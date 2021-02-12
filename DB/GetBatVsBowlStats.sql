@@ -76,7 +76,7 @@ DECLARE
 					sro.dismissal_kind
 				END decision
 			FROM strike_rate_out sro
-			LEFT JOIN league.dismissals dis ON dis.dismissal = sro.dismissal_kind
+			LEFT JOIN league.dismissals dis ON dis.dismissal = COALESCE(sro.dismissal_kind, 'Notout')
 			ORDER BY sro.match_id, sro.over, sro.ball;
 	END;
 $BODY$;
