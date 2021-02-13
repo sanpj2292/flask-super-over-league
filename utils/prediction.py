@@ -6,6 +6,7 @@ from pandas.core.frame import DataFrame # data processing, CSV file I/O (e.g. pd
 # from sklearn.linear_model import LogisticRegression
 # from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn import metrics
 from typing import Dict, List
 #building predictive model , convert categorical to numerical data
@@ -86,7 +87,8 @@ def trainData(dataframe, xvars, yvars):
     # model = DecisionTreeClassifier(criterion='gini', random_state=0)
     # np.random.RandomState(15)
     # model = DecisionTreeClassifier(criterion='gini')
-    model = DecisionTreeRegressor()
+    # model = DecisionTreeRegressor()
+    model = RandomForestRegressor()
     X, Y = dataframe[xvars], dataframe[yvars]
     model.fit(X, Y)
     return model
