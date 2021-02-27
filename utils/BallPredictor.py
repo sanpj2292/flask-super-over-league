@@ -5,7 +5,7 @@ from utils import prediction
 
 class BallPredictor:
     
-    def __init__(self, batsman:str, bowler:str, modelVars:List[str], predVars:List[str]):
+    def __init__(self, batsman:str, nonstriker:str, bowler:str, modelVars:List[str], predVars:List[str]):
         self.batsman = batsman
         self.bowler = bowler
         self.var_mods = modelVars
@@ -40,14 +40,17 @@ class BallPredictor:
             'inpDf': DataFrame([{ **inputDict, **strikerate}]),
             'predDf': predDf,
         }
+
+    def getDismissalData(self, dismissal):
+        db_cursor.execute(f'''
+            SELECT * FROM league.dismissals WHERE dismissal_id={dismissal}
+        ''')
+        return db_cursor.fetchall()[0]
     
     def calculatePrevStrikeRates (self, predDf:DataFrame):
         prev_bat_str_rt = 100 * self.prevTotalRuns/self.prevTotalBallCount
         prev_bow_str_rt = self.prevTotalBallCount/self.prevTotalWickets
-        db_cursor.execute(f'''
-            SELECT * FROM league.dismissals WHERE dismissal_id={predDf['dismissal'].iloc[0]}
-        ''')
-        dismissal = db_cursor.fetchall()[0]
+        dismissal = self.getDismissalData(predDf['dismissal'].iloc[0])
         if dismissal['is_wicket'] and dismissal['is_wicket_to_bowler']:
             self.prevTotalWickets += 1
         
@@ -59,8 +62,8 @@ class BallPredictor:
             'prevbatsmanstrikerate': prev_bat_str_rt,
             'prevbowlerstrikerate': prev_bow_str_rt
         }
-    
-    def predict(self, ballcount:int) -> DataFrame:
+        
+    def formInputDataFrame(self):
         totalDf = self.getBatVsBowlStats()
         self.prevTotalBallCount = totalDf['ballcount'].iloc[-1]
         self.prevTotalRuns = totalDf['sumruns'].iloc[-1]
@@ -71,17 +74,28 @@ class BallPredictor:
             'prevbatsmanstrikerate': totalDf['prevbatsmanstrikerate'].iloc[-1],
             'prevbowlerstrikerate': totalDf['prevbowlerstrikerate'].iloc[-1]
         }])
+        return {
+            'totalDf': totalDf,
+            'inputDf': inputDf
+        }
+        
+    def changeBatsman(self, prediction):
+        pass
+    
+    def predict(self, ballcount:int) -> DataFrame:
+        dfDict = self.formInputDataFrame()
         predics = []
-        self.predictBall(totalDf, inputDf, 1, ballcount, predics)
+        self.predictBall(dfDict['totalDf'], dfDict['inputDf'], 1, ballcount, predics)
         return DataFrame(predics, index=range(1, len(predics) + 1), columns=self.var_mods)
     
     def predictBall(self, totalDf:DataFrame, inputDf:DataFrame, ball:int, maxballs:int, predics):
         sub = 1
         if (ball <= maxballs):
             predictions = prediction.prepare_data(totalDf, inputDf, self.var_preds, self.var_mods)
+            # Should include logic for a batsman change if necessary after a ball is predicted
             newInpDf = self.getInputDataFrame(totalDf, predictions)
             predics.append(predictions)
-            if (newInpDf['predDf']['wide'].iloc[0] > 0 or newInpDf['predDf']['wide'].iloc[0] > 0):
+            if (newInpDf['predDf']['wide'].iloc[0] > 0 or newInpDf['predDf']['noball'].iloc[0] > 0):
                 sub = 0
             ball += sub
             self.predictBall(totalDf, newInpDf['inpDf'], ball, maxballs, predics)
